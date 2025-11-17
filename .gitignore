@@ -207,6 +207,7 @@ marimo/_lsp/
 __marimo__/
 
 # Output
-/ResearchAgent/output.json
-/TransportAgent/output.json
-/TransportAgent/output_raw_responses.json
+/ResearchAgent/outputs
+/TransportAgent/outputs
+
+/documentations

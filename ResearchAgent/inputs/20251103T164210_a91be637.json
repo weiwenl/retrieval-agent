@@ -1,0 +1,38 @@
+{
+    "status_code": 200,
+    "interest": [
+        "Explore local cultural sites in singapore"
+    ],
+    "message": "I am planning a short trip to Singapore for 4 days from July 10 to July 13 with a budget of around 250 dollars and I prefer a relaxed travel pace.\nWe are 3 adult.\nI'm moderate eco-conscious and enjoy trying local street food. I'm particularly interested in exploring local cultural sites in Singapore.",
+    "json_filename": "sessions/a91be637.json",
+    "session_id": "a91be637",
+    "timestamp": "2025-11-03T16:42:10.235617",
+    "requirements": {
+        "destination_city": "Singapore",
+        "trip_dates": {
+            "start_date": "2026-07-10",
+            "end_date": "2026-07-13"
+        },
+        "duration_days": 4,
+        "travelers": {
+            "adults": 3,
+            "children": 0
+        },
+        "budget_total_sgd": 250,
+        "pace": "relaxed",
+        "optional": {
+            "eco_preferences": "moderate",
+            "dietary_preferences": "local food",
+            "interests": [
+                "Visit local cultural sites in singapore"
+            ],
+            "uninterests": ["zoo", "amusement parks", "aquariums"],
+            "accessibility_needs": "no_preference",
+            "accommodation_location": {
+                "lat": 1.2911215426008615,
+                "lng": 103.85995730987935
+            },
+            "group_type": "friends"
+        }
+    }
+}

@@ -1,0 +1,37 @@
+{
+    "status_code": 200,
+    "interest": [
+        "exploring near Changi Airport, and go to adventure cove waterpark"
+    ],
+    "message": "I am planning to travel to singapore for 3 days from june 1 to june 3 with a budget of around 100 dollars and I prefer moderate travel pace\nI am planning to travel to singapore for 3 days from june 1 to june 3 with a budget of around 100 dollars and I prefer moderate travel pace\n2 adults 3 children\nI have no eco preferences. I am a non-veg person. I love to explore near changi airport\nI prefer to explore near the changi airport which is my inetrest\nI have no specific accessibility needs. and i prefer to stay near the jurong mall\nI prefer to travel as a family ",
+    "json_filename": "sessions/f312ea72.json",
+    "session_id": "f312ea72",
+    "timestamp": "2025-10-31T00:34:47.763036",
+    "requirements": {
+        "destination_city": "Singapore",
+        "trip_dates": {
+            "start_date": "2025-06-01",
+            "end_date": "2025-06-03"
+        },
+        "duration_days": 3,
+        "travelers": {
+            "adults": 2,
+            "children": 3
+        },
+        "budget_total_sgd": 1000,
+        "pace": "moderate",
+        "optional": {
+            "eco_preferences": "no",
+            "dietary_preferences": "non-veg",
+            "interests": [
+                "exploring near Changi Airport, and go to adventure cove waterpark"
+            ],
+            "uninterests": [],
+            "accessibility_needs": "no_preference",
+            "accommodation_location": {
+                "neighborhood": "near the Jurong Mall"
+            },
+            "group_type": "family"
+        }
+    }
+}

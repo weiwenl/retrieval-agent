@@ -1,0 +1,37 @@
+{
+    "status_code": 200,
+    "interest": [
+        "I want to go to the aquarium sea and zoo in singapore"
+    ],
+    "message": "",
+    "json_filename": "sessions/f312ea72.json",
+    "session_id": "f312ea72",
+    "timestamp": "2025-10-31T00:34:47.763036",
+    "requirements": {
+        "destination_city": "Singapore",
+        "trip_dates": {
+            "start_date": "2026-11-01",
+            "end_date": "2026-11-05"
+        },
+        "duration_days": 5,
+        "travelers": {
+            "adults": 2,
+            "children": 0
+        },
+        "budget_total_sgd": 100,
+        "pace": "moderate",
+        "optional": {
+            "eco_preferences": "no",
+            "dietary_preferences": "indian",
+            "interests": [
+                "I want to go to the aquarium sea and zoo in singapore"
+            ],
+            "uninterests": [],
+            "accessibility_needs": "no_preference",
+            "accommodation_location": {
+                "neighborhood": "near bugis"
+            },
+            "group_type": "family"
+        }
+    }
+}
