@@ -25,7 +25,7 @@ try:
     from anthropic import Anthropic
 except ImportError:
     Anthropic = None
-    
+
 # Configure logging
 handlers = [logging.StreamHandler()]
 
@@ -90,383 +90,15 @@ except FileNotFoundError:
     print("No inputs directory found")
     
 class TransportSustainabilityAgent:
-    def __init__(self, system_prompt=""):
-        # Initialize OpenAI client
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        
-        # Agent configuration
-        self.model_name = "gpt-4o"
-        self.temperature = 0.3
-        
-        # Message history
-        self.messages = []
-        self.system_prompt = system_prompt or self._get_default_system_prompt()
-        
-        if self.system_prompt:
-            self.messages.append({"role": "system", "content": self.system_prompt})
-        
-        # Tool definitions
-        self.available_tools = self._define_transport_tools()
+    """
+    Deterministic transport routing processor for Singapore travel itineraries.
+    Uses Google Routes API and hardcoded filtering rules to calculate optimal
+    transport options between destinations.
+    """
 
-        # Known actions mapping (import functions from other modules)
-        from tools import (
-            get_transport_options_concurrent,
-            batch_process_routes
-        )
-        from singapore_transport_carbon_score import carbon_estimate
-
-        self.known_actions = {
-            "get_transport_options": get_transport_options_concurrent,
-            "batch_process_routes": batch_process_routes,
-            "carbon_estimate": carbon_estimate,
-            # "calculate_carbon_emissions": add_carbon_to_transport_options,
-            # "batch_calculate_carbon": batch_calculate_carbon,
-            # "compare_carbon_emissions": compare_carbon_emissions
-        }
-
-    def __call__(self, message: str) -> Dict:
-        """Execute reasoning and return transport data."""
-        self.messages.append({"role": "user", "content": message})
-        result = self.execute()
-        self.messages.append({"role": "assistant", "content": str(result)})
-        return result
-
-    def execute(self) -> Dict:
-        """Execute with function calling support, return transport data."""
-        response = self.client.chat.completions.create(
-            model=self.model_name,
-            temperature=self.temperature,
-            messages=self.messages,
-            tools=self.available_tools,
-            tool_choice="auto"
-        )
-
-        message = response.choices[0].message
-
-        # Handle function calls if present
-        if message.tool_calls:
-            # Add assistant message with tool calls
-            self.messages.append({
-                "role": "assistant",
-                "content": message.content,
-                "tool_calls": message.tool_calls
-            })
-
-            all_tool_results = []
-
-            # Execute tool calls
-            for tool_call in message.tool_calls:
-                tool_result = self._execute_tool_call(tool_call)
-                all_tool_results.append({
-                    "tool": tool_call.function.name,
-                    "args": json.loads(tool_call.function.arguments),
-                    "result": tool_result
-                })
-
-                # Add tool result to messages
-                self.messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "content": json.dumps(tool_result, default=str)
-                })
-
-            # Return results from tools
-            return {
-                "reasoning": message.content,
-                "tool_results": all_tool_results,
-                "raw_routes": self._extract_routes_from_results(all_tool_results)
-            }
-
-        return {
-            "reasoning": message.content,
-            "tool_results": [],
-            "raw_routes": []
-        }
-
-    def _execute_tool_call(self, tool_call) -> Dict[str, Any]:
-        """Execute tool call and return raw results."""
-        tool_name = tool_call.function.name
-        tool_args = json.loads(tool_call.function.arguments)
-
-        logger.info(f"TRANSPORT AGENT: Executing {tool_name}")
-
-        if tool_name in self.known_actions:
-            return self.known_actions[tool_name](**tool_args)
-        else:
-            return {"error": f"Unknown tool: {tool_name}"}
-
-    def _extract_routes_from_results(self, tool_results: List[Dict]) -> List[Dict]:
-        """Extract all route data from tool results."""
-        all_routes = []
-        for result in tool_results:
-            if result["tool"] == "batch_process_routes":
-                routes = result.get("result", [])
-                if isinstance(routes, list):
-                    all_routes.extend(routes)
-            elif result["tool"] == "batch_calculate_carbon":
-                # This returns the routes with carbon data added
-                routes = result.get("result", [])
-                if isinstance(routes, list):
-                    all_routes = routes  # Replace with carbon-enriched routes
-        return all_routes
-
-    def _get_default_system_prompt(self) -> str:
-        """Default system prompt following thought-action-observation pattern."""
-        return """
-            You are a transportation routing specialist. You run in a loop of Thought, Action, Observation.
-            At the end of the loop you output raw transport data results with carbon emissions.
-
-            Use Thought to describe your reasoning about transport routing and optimization.
-            Use Action to run one of the actions available to you.
-            Observation will be the result of running those actions.
-
-            INPUT PROCESSING:
-            1. Group all attractions/places by their geo_cluster_id
-            2. Include accommodation details in each geo_cluster_group
-            3. Identify all unique location pairs that need transport calculations
-
-            Your available actions are:
-            1. get_transport_options: Get all transport modes between two locations
-            2. calculate_carbon_emissions: Calculate carbon score for each transport mode
-            3. batch_process_routes: Process multiple route pairs efficiently (async when possible)
-
-            TRANSPORT MODE EVALUATION:
-            For each location pair, retrieve and evaluate ALL transport modes:
-            - Walk
-            - Cycle (automatically created for walking routes >2km or >20min)
-            - Public Transit (MRT/Bus)
-            - Ride (Grab/Private Hire/Taxi)
-
-            TRANSPORT FILTERING RULES:
-            Apply intelligent filtering based on practicality thresholds:
-
-            Walk:
-            - API queries capped at 10km max distance and 240 minutes max duration
-            - Routes >2km automatically removed from output (converted to cycle)
-            - Only show walk if distance <=2km
-            - Consider weather/climate factors if available
-
-            Cycle:
-            - Maximum distance: 8km (whether from API or converted from walking)
-            - Maximum duration: 45 minutes
-            - Automatically created from walking routes >2km or >20min
-
-            Public Transit (MRT/Bus):
-            - Exclude if requires > 3 transfers
-            - Exclude if duration > 60 minutes
-            - Exclude if walking portion > 1.5 km
-            - Flag if service hours limited (early morning/late night)
-
-            Ride (Grab/Private Hire/Taxi):
-            - Always include as fallback option
-            - Flag if cost > 30 SGD as "expensive"
-            - Consider surge pricing times if data available
-
-            CARBON EMISSIONS CALCULATION:
-            For each valid transport mode:
-            1. Use latitude/longitude of origin and destination
-            2. Calculate carbon using Singapore emission factors:
-            - Transport mode type
-            - Distance traveled
-            - Vehicle type (if applicable)
-            3. Include carbon score in final output
-        """.strip()
-
-    def _define_transport_tools(self) -> List[Dict]:
-        """Define transport tools for LLM function calling."""
-        return [
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_transport_options",
-                    "description": "Get transport options (walk, cycle, public transport, ride) between two locations with distance, duration, and cost. Walking routes >2km are removed from output and converted to cycle option.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "origin": {
-                                "type": "object",
-                                "properties": {
-                                    "latitude": {"type": "number"},
-                                    "longitude": {"type": "number"}
-                                },
-                                "required": ["latitude", "longitude"],
-                                "description": "Origin location coordinates"
-                            },
-                            "destination": {
-                                "type": "object",
-                                "properties": {
-                                    "latitude": {"type": "number"},
-                                    "longitude": {"type": "number"}
-                                },
-                                "required": ["latitude", "longitude"],
-                                "description": "Destination location coordinates"
-                            }
-                        },
-                        "required": ["origin", "destination"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "batch_process_routes",
-                    "description": "Process multiple route pairs efficiently to get transport options for all location pairs at once",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "location_pairs": {
-                                "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "origin": {"type": "object"},
-                                        "destination": {"type": "object"},
-                                        "origin_name": {"type": "string"},
-                                        "destination_name": {"type": "string"}
-                                    }
-                                },
-                                "description": "List of location pairs to process"
-                            },
-                            "concurrent": {
-                                "type": "boolean",
-                                "description": "Whether to use concurrent processing (default: true)",
-                                "default": True
-                            }
-                        },
-                        "required": ["location_pairs"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "batch_calculate_carbon",
-                    "description": "Calculate carbon emissions for all transport routes using hardcoded emission factors (driving: 0.21, taxi: 0.22, bus: 0.09, mrt: 0.035, cycle: 0, walking: 0.02 kg CO2/km)",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "route_results": {
-                                "type": "array",
-                                "items": {"type": "object"},
-                                "description": "List of route results from batch_process_routes"
-                            }
-                        },
-                        "required": ["route_results"]
-                    }
-                }
-            }
-        ]
-
-    def process_places_data(self, places_data: Dict) -> Dict[str, Any]:
-        """
-        Process places data and extract places from nested structure.
-
-        Args:
-            places_data: Input data with retrieval.places_matrix.candidates structure
-
-        Returns:
-            Dict with places list and metadata
-        """
-        # Extract places from nested structure
-        retrieval = places_data.get("retrieval", {})
-        places_matrix = retrieval.get("places_matrix", {})
-        # Support both "candidates" (new) and "nodes" (old) for backward compatibility
-        formatted_places = places_matrix.get("candidates", places_matrix.get("nodes", []))
-
-        logger.info(f"Loaded {len(formatted_places)} places from input")
-
-        return {
-            "formatted_places": formatted_places,
-            "total_places": len(formatted_places),
-            "metadata": {
-                "attractions_count": retrieval.get("attractions_count", 0),
-                "food_count": retrieval.get("food_count", 0),
-                "places_found": retrieval.get("places_found", 0)
-            }
-        }
-
-    # COMMENTED OUT: Old logic for transport matrix (all place-to-place connections)
-    # def identify_location_pairs(
-    #     self,
-    #     places: List[Dict],
-    #     accommodation: Optional[Dict[str, float]] = None
-    # ) -> list:
-    #     """
-    #     Identify all unique location pairs that need transport calculations.
-    #     Creates one-way connections: A→B, A→C, B→C (but not B→A, C→A, C→B).
-    #
-    #     Args:
-    #         places: List of all places
-    #         accommodation: Optional accommodation location dict
-    #
-    #     Returns:
-    #         List of tuples (origin_coords, dest_coords, origin_name, dest_name)
-    #     """
-    #     pairs = []
-    #
-    #     # Add accommodation to all places if provided
-    #     if accommodation:
-    #         acc_location = {
-    #             "latitude": accommodation.get("lat"),
-    #             "longitude": accommodation.get("lon", accommodation.get("lng"))
-    #         }
-    #
-    #         for destination_place in places:
-    #             destination_location = destination_place.get("geo", {})
-    #             pairs.append((
-    #                 acc_location,
-    #                 destination_location,
-    #                 "Accommodation",
-    #                 destination_place.get("name", "Unknown")
-    #             ))
-    #
-    #     # Add all place-to-place pairs (one-way only)
-    #     # A→B, A→C, A→D, B→C, B→D, C→D
-    #     for i, origin_place in enumerate(places):
-    #         for destination_place in places[i+1:]:
-    #             pairs.append((
-    #                 origin_place.get("geo", {}),
-    #                 destination_place.get("geo", {}),
-    #                 origin_place.get("name", "Unknown"),
-    #                 destination_place.get("name", "Unknown")
-    #             ))
-    #
-    #     logger.info(f"Identified {len(pairs)} location pairs for transport calculation")
-    #
-    #     return pairs
-
-    # COMMENTED OUT: Old logic for calculating all routes (transport matrix)
-    # def calculate_all_routes(
-    #     self,
-    #     location_pairs: list,
-    #     concurrent: bool = True
-    # ) -> list:
-    #     """
-    #     Calculate routes and carbon emissions for all location pairs.
-    #
-    #     Args:
-    #         location_pairs: List of 4-element tuples (origin_coords, dest_coords, origin_name, dest_name)
-    #         concurrent: Whether to use concurrent processing
-    #
-    #     Returns:
-    #         List of route results with transport options and carbon data
-    #     """
-    #     from tools import batch_process_routes
-    #     from carbon_calculator import batch_calculate_carbon
-    #
-    #     logger.info(f"Calculating routes for {len(location_pairs)} location pairs...")
-    #
-    #     # Get route data for all pairs
-    #     route_results = batch_process_routes(location_pairs, concurrent=concurrent)
-    #
-    #     logger.info(f"Adding carbon emission data...")
-    #
-    #     # Add carbon emissions to all routes using hardcoded emission factors
-    #     route_results = batch_calculate_carbon(route_results)
-    #
-    #     logger.info(f"Completed route calculations")
-    #
-    #     return route_results
+    def __init__(self):
+        """Initialize the transport agent (no state needed for deterministic processing)."""
+        pass
 
     def calculate_day_by_day_routes(
         self,
@@ -474,7 +106,7 @@ class TransportSustainabilityAgent:
         accommodation_location: Dict
     ) -> Dict:
         """
-        Calculate routes day-by-day based on itinerary with LLM optimization.
+        Calculate routes day-by-day based on itinerary using deterministic Google Routes API.
 
         For each day:
         - Start from accommodation
@@ -482,16 +114,17 @@ class TransportSustainabilityAgent:
         - Go to lunch place (if not null)
         - Go to afternoon place (if not null)
         - Skip null items and jump to next place
-        - Generate LLM recommendations for optimal transport
+        - Calculate transport options for each leg using Google Routes API
 
         Args:
             places_data: Input data with itinerary
             accommodation_location: Dict with lat, lng of accommodation
 
         Returns:
-            Dict with transport data organized by date with LLM recommendations
+            Dict with transport data organized by date with route connections
         """
         from tools import get_transport_options_concurrent
+        # from tools import get_optimized_daily_route  # COMMENTED OUT: Not using waypoint optimization (It's a WIP future enhancement)
 
         itinerary = places_data.get("itinerary", {})
         transport = {}
@@ -559,11 +192,41 @@ class TransportSustainabilityAgent:
                             })
                             logger.info(f"    Added {item.get('name')} from {period_name}")
 
-            # Calculate routes for each leg (point to point)
+            # === ROUTE OPTIMIZATION (COMMENTED OUT) ===
+            # # Optimize visit order using Google Routes API (for sequences with 3+ places)
+            # optimized_sequence = sequence
+            # optimization_applied = False
+            #
+            # if len(sequence) >= 3:
+            #     logger.info(f"  Optimizing route for {len(sequence)} places using Google Routes API...")
+            #     logger.info(f"  Original order: {' -> '.join([p['name'] for p in sequence])}")
+            #
+            #     optimization_result = get_optimized_daily_route(sequence, travel_mode="DRIVE")
+            #
+            #     if optimization_result:
+            #         optimized_sequence = optimization_result['optimized_places']
+            #         optimization_applied = True
+            #
+            #         logger.info(f"  Optimization successful!")
+            #         logger.info(f"  Optimized order: {' -> '.join([p['name'] for p in optimized_sequence])}")
+            #         logger.info(f"  Total distance: {optimization_result['total_distance_km']} km")
+            #         logger.info(f"  Total duration: {optimization_result['total_duration_minutes']} min")
+            #         logger.info(f"  Savings: Using deterministic Google Routes optimization")
+            #     else:
+            #         logger.warning(f"  Optimization failed, using original order")
+            #         optimized_sequence = sequence
+            # else:
+            #     logger.info(f"  Skipping optimization (< 3 places in sequence)")
+
+            # Use original chronological sequence (no optimization)
+            optimized_sequence = sequence
+            optimization_applied = False
+
+            # Calculate routes for each leg (using original chronological sequence)
             connections = []
-            for i in range(len(sequence) - 1):
-                origin = sequence[i]
-                destination = sequence[i + 1]
+            for i in range(len(optimized_sequence) - 1):
+                origin = optimized_sequence[i]
+                destination = optimized_sequence[i + 1]
 
                 logger.info(f"  Route: {origin['name']} -> {destination['name']}")
 
@@ -619,6 +282,12 @@ class TransportSustainabilityAgent:
             # Store connections WITHOUT LLM recommendations for this date
             transport[date] = {
                 "connections": connections
+                # "route_optimization": {
+                #     "applied": optimization_applied,
+                #     "method": "google_routes_optimize_waypoint_order" if optimization_applied else "none",
+                #     "original_order": [p['name'] for p in sequence] if optimization_applied else None,
+                #     "optimized_order": [p['name'] for p in optimized_sequence] if optimization_applied else None
+                # }
                 # "llm_recommendations": {
                 #     "route_optimization": route_optimization,
                 #     "personalized_tips": personalized_tips,
