@@ -39,7 +39,7 @@ class TestTransportItineraryProcessing(unittest.TestCase):
             }
         }
 
-    @patch('main.get_transport_options_concurrent')
+    @patch('tools.get_transport_options_concurrent')
     def test_items_as_array(self, mock_transport):
         """Test processing when items is an array of places."""
         mock_transport.return_value = self.mock_transport_response
@@ -78,7 +78,7 @@ class TestTransportItineraryProcessing(unittest.TestCase):
         self.assertEqual(connections[1]["from_place_name"], "Place 1")
         self.assertEqual(connections[1]["to_place_name"], "Place 2")
 
-    @patch('main.get_transport_options_concurrent')
+    @patch('tools.get_transport_options_concurrent')
     def test_items_as_single_object(self, mock_transport):
         """Test processing when items is a single object (not array)."""
         mock_transport.return_value = self.mock_transport_response
@@ -106,7 +106,7 @@ class TestTransportItineraryProcessing(unittest.TestCase):
         self.assertEqual(len(connections), 1)
         self.assertEqual(connections[0]["to_place_name"], "Single Place")
 
-    @patch('main.get_transport_options_concurrent')
+    @patch('tools.get_transport_options_concurrent')
     def test_null_and_empty_items(self, mock_transport):
         """Test that null items and empty arrays are skipped."""
         mock_transport.return_value = self.mock_transport_response
@@ -144,7 +144,7 @@ class TestTransportItineraryProcessing(unittest.TestCase):
         self.assertEqual(len(connections), 1)
         self.assertEqual(connections[0]["to_place_name"], "Valid Place")
 
-    @patch('main.get_transport_options_concurrent')
+    @patch('tools.get_transport_options_concurrent')
     def test_dynamic_time_periods(self, mock_transport):
         """Test that time periods are not hardcoded (can be breakfast, dinner, etc.)."""
         mock_transport.return_value = self.mock_transport_response
@@ -175,7 +175,7 @@ class TestTransportItineraryProcessing(unittest.TestCase):
         self.assertEqual(connections[0]["to_place_name"], "Breakfast Spot")
         self.assertEqual(connections[1]["to_place_name"], "Dinner Spot")
 
-    @patch('main.get_transport_options_concurrent')
+    @patch('tools.get_transport_options_concurrent')
     def test_time_sorting(self, mock_transport):
         """Test that time periods are sorted chronologically."""
         mock_transport.return_value = self.mock_transport_response
@@ -212,7 +212,7 @@ class TestTransportItineraryProcessing(unittest.TestCase):
         self.assertEqual(connections[1]["to_place_name"], "Lunch Place")
         self.assertEqual(connections[2]["to_place_name"], "Afternoon Place")
 
-    @patch('main.get_transport_options_concurrent')
+    @patch('tools.get_transport_options_concurrent')
     def test_multiple_dates(self, mock_transport):
         """Test processing multiple dates in itinerary."""
         mock_transport.return_value = self.mock_transport_response
@@ -245,7 +245,7 @@ class TestTransportItineraryProcessing(unittest.TestCase):
         self.assertEqual(len(result["2025-06-01"]["connections"]), 1)
         self.assertEqual(len(result["2025-06-02"]["connections"]), 1)
 
-    @patch('main.get_transport_options_concurrent')
+    @patch('tools.get_transport_options_concurrent')
     def test_accommodation_always_first(self, mock_transport):
         """Test that accommodation is always the starting point."""
         mock_transport.return_value = self.mock_transport_response
